@@ -1,7 +1,6 @@
 package main
 
 import(
-  "fmt"
   "time"
   "runtime"
   "math/rand"
@@ -28,6 +27,12 @@ const(
 type Tetromino [4]struct {
   x int
   y int
+}
+
+type Color struct{
+  R int
+  G int
+  B int
 }
 
 // GLOBAL VARIABLES
@@ -77,6 +82,20 @@ var (
 
   // There will only be one peice active at a time
   tetromino Tetromino
+  matrixTetromino [][]int
+  colorIdx int
+
+
+  Colors = []Color{
+		Color{0, 0, 0},
+		Color{170, 0, 0},
+		Color{192, 192, 192},
+		Color{170, 0, 170},
+		Color{0, 0, 170},
+		Color{0, 170, 0},
+		Color{170, 85, 0},
+		Color{0, 170, 170},
+	}
 )
 
 func init() {
@@ -101,6 +120,8 @@ func main() {
 		panic(err)
 	}
 
+  startGame()
+
   // by making this thread the current context
   // we are saying that all drawings will happen on this thread
   // since we dont have multiple windows, is this needed?
@@ -109,18 +130,9 @@ func main() {
   // set the key press callback for everytime we get a keyboard input
   window.SetKeyCallback(keyPress)
 
-  // intialize the Grid
-  initGrid()
-  t := InitialTetros[0]
-  printTetromino(t)
-  t = rotateMatrix(t)
-  printTetromino(t)
-
-
-
 
   // set up the ticker wich will run the ticker every round
-  //go gameTick()
+  go gameTicker()
 
   // Init OpenGL
 	gl.Ortho(0, WINDOW_WIDTH, WINDOW_HEIGHT, 0, -1, 1)
@@ -134,30 +146,84 @@ func main() {
 
   for !window.ShouldClose() {
 		// Do OpenGL stuff.
-		window.SwapBuffers()
+    gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+    drawScene()
+    window.SwapBuffers()
 		glfw.PollEvents()
 	}
 }
 
 func keyPress(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-  fmt.Printf("key: %v, scancode: %d, action: %v\n", key, scancode, action)
-}
-
-func update() {
-  fmt.Printf("%v", time.Now())
-}
-
-func gameTick() {
-  ticker := time.NewTicker(time.Millisecond * TIMER_PERIOD)
-  for t := range ticker.C {
-    fmt.Println("Ticker at", t)
+  switch key {
+  case glfw.KeyUp:
+    rotateTetromino()
+  	case glfw.KeyLeft:
+  		lateralTranslation(-1)
+  	case glfw.KeyRight:
+  		lateralTranslation(1)
+  	case glfw.KeyDown:
+  		moveDown()
   }
+}
+
+func gameTicker() {
+  ticker := time.NewTicker(time.Millisecond * TIMER_PERIOD)
+  for _ = range ticker.C {
+    tick()
+  }
+}
+
+func tick() {
+  moveDown()
+}
+
+func drawScene() {
+  drawTetromino()
+	drawField()
+}
+
+func drawBlock(i int, j int) {
+  i--
+  j--
+  gl.Begin(gl.POLYGON)
+	glVertex(j * BLOCK_SIZE, i * BLOCK_SIZE)
+	glVertex((j+1) * BLOCK_SIZE - 1, i * BLOCK_SIZE)
+	glVertex((j+1) * BLOCK_SIZE - 1, (i+1) * BLOCK_SIZE -1)
+	glVertex(j * BLOCK_SIZE, (i+1) * BLOCK_SIZE - 1)
+	gl.End()
+}
+
+func drawTetromino() {
+  setColor(colorIdx)
+  for _, pos := range tetromino {
+    drawBlock(posY + pos.y, posX + pos.x)
+  }
+}
+
+func glVertex(x, y int) {
+	gl.Vertex2i(int32(x), int32(y))
+}
+
+func drawField() {
+  for i, row := range field {
+    for j, cell := range row {
+      if cell > 0 {
+        setColor(cell - 1)
+        drawBlock(i, j)
+      }
+    }
+  }
+}
+
+func startGame() {
+  initGrid()
+  generateTetromino()
 }
 
 // move the tetromino peice left and right
 func lateralTranslation(dx int) {
   for _, pos := range tetromino {
-    if field[pos.x + posX + dx][pos.y + posY] != 0 {
+    if field[pos.y + posY][pos.x + posX + dx] != 0 {
       return
     }
   }
@@ -165,22 +231,50 @@ func lateralTranslation(dx int) {
   posX += dx
 }
 
-func moveDown() {
-  for _, pos := range tetromino {
-    if field[pos.x + posX][pos.y + posY + 1] != 0 {
-      // leave the peice on the field
-      placeTetro()
+func rotateTetromino() {
+  // generate rotated matrix
+  newTetrominoMatrix := rotateMatrix(matrixTetromino)
+  newTetromino := makeTretroObject(newTetrominoMatrix)
+
+  for _, pos := range newTetromino {
+    if field[posY + pos.y][posX + pos.x] != 0 {
       return
     }
   }
 
-  posY += 1
+  // assign the current tetromino to the new matrix
+  tetromino = newTetromino
+}
+
+func moveDown() {
+  for _, pos := range tetromino {
+    if field[pos.y + posY + 1][pos.x + posX] != 0 {
+
+      // the Game is over
+      if posY < 2 {
+				startGame()
+				return
+			}
+
+      // leave the peice on the field
+      placeTetro()
+      generateTetromino()
+      return
+    }
+  }
+
+  posY++
 }
 
 func placeTetro() {
   for _, pos := range tetromino {
-    field[pos.x][pos.y] = 1
+    field[posY + pos.y][posX + pos.x] = colorIdx + 1
   }
+}
+
+func setColor(idx int) {
+  c := Colors[idx]
+  gl.Color3ub(uint8(c.R), uint8(c.G), uint8(c.B))
 }
 
 // since all the pecies are represented as a 2D matrix
@@ -197,17 +291,6 @@ func rotateMatrix(mat [][]int) [][]int {
         }
     }
     return mat
-}
-
-
-// for testing
-func printTetromino(matrix [][]int) {
-  for _, row := range matrix {
-    for _, cell := range row {
-      fmt.Printf("%d ", cell)
-    }
-    fmt.Println("")
-  }
 }
 
 func makeTretroObject(matrix [][]int) (res Tetromino){
@@ -227,10 +310,12 @@ func makeTretroObject(matrix [][]int) (res Tetromino){
 
 // Genearte a new Tetromino object to be placed into the field
 func generateTetromino() {
-  posX = 0
-  posY = FIELD_WIDTH / 2
-  r := rand.Intn(4)
-  tetromino = makeTretroObject(InitialTetros[r])
+  posY = 0
+  posX = FIELD_WIDTH / 2
+  colorIdx = rand.Intn(8)
+  r := rand.Intn(5)
+  matrixTetromino = InitialTetros[r]
+  tetromino = makeTretroObject(matrixTetromino)
 }
 
 // initGrid will populate the values of the global grid object
