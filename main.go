@@ -156,6 +156,10 @@ func main() {
 func keyPress(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
   switch key {
   case glfw.KeyUp:
+    // we dont want to trigger on the edges of a key press
+    if action != glfw.Press {
+      return
+    }
     rotateTetromino()
   	case glfw.KeyLeft:
   		lateralTranslation(-1)
@@ -176,6 +180,39 @@ func gameTicker() {
 func tick() {
   moveDown()
 }
+
+// The deleteCompletedLine function will delete an entire line
+// from the field if there is not single element with the value of
+// 0. We the move everthing above that row down by done
+func deleteCompletedLine() {
+  for i, row := range field {
+    if i == 0 || i == FIELD_LENGTH + 1 {
+      continue
+    }
+
+
+    completedRow := true
+
+    for _, cell := range row {
+      if cell == 0 {
+        completedRow = false
+        //break
+      }
+    }
+
+    // move everything down by one
+    if completedRow == true {
+      println(i)
+      for x := i - 1; x >= 1; x-- {
+        for y, _ := range field[x] {
+          field[x+1][y] = field[x][y]
+        }
+      }
+      return
+    }
+  }
+}
+
 
 func drawScene() {
   drawTetromino()
@@ -258,6 +295,7 @@ func moveDown() {
 
       // leave the peice on the field
       placeTetro()
+      deleteCompletedLine()
       generateTetromino()
       return
     }
