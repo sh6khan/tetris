@@ -21,10 +21,16 @@ const(
 	WINDOW_HEIGHT = BLOCK_SIZE * FIELD_LENGTH
 )
 
+type Tetromino struct {
+  pos [4]Position
+  colorIdx int
+  matrix [][]int
+}
+
 // Each peice in the game is defined by
 // and array of 4 points, the points
 // are defined by integer x and y values
-type Tetromino [4]struct {
+type Position struct {
   x int
   y int
 }
@@ -82,9 +88,6 @@ var (
 
   // There will only be one peice active at a time
   tetromino Tetromino
-  matrixTetromino [][]int
-  colorIdx int
-
 
   Colors = []Color{
 		Color{0, 0, 0},
@@ -196,7 +199,7 @@ func deleteCompletedLine() {
     for _, cell := range row {
       if cell == 0 {
         completedRow = false
-        //break
+        break
       }
     }
 
@@ -231,8 +234,8 @@ func drawBlock(i int, j int) {
 }
 
 func drawTetromino() {
-  setColor(colorIdx)
-  for _, pos := range tetromino {
+  setColor(tetromino.colorIdx)
+  for _, pos := range tetromino.pos {
     drawBlock(posY + pos.y, posX + pos.x)
   }
 }
@@ -259,7 +262,7 @@ func startGame() {
 
 // move the tetromino peice left and right
 func lateralTranslation(dx int) {
-  for _, pos := range tetromino {
+  for _, pos := range tetromino.pos {
     if field[pos.y + posY][pos.x + posX + dx] != 0 {
       return
     }
@@ -270,21 +273,22 @@ func lateralTranslation(dx int) {
 
 func rotateTetromino() {
   // generate rotated matrix
-  newTetrominoMatrix := rotateMatrix(matrixTetromino)
+  newTetrominoMatrix := rotateMatrix(tetromino.matrix)
   newTetromino := makeTretroObject(newTetrominoMatrix)
 
-  for _, pos := range newTetromino {
+  for _, pos := range newTetromino.pos {
     if field[posY + pos.y][posX + pos.x] != 0 {
       return
     }
   }
 
   // assign the current tetromino to the new matrix
+  newTetromino.colorIdx = tetromino.colorIdx
   tetromino = newTetromino
 }
 
 func moveDown() {
-  for _, pos := range tetromino {
+  for _, pos := range tetromino.pos {
     if field[pos.y + posY + 1][pos.x + posX] != 0 {
 
       // the Game is over
@@ -305,8 +309,8 @@ func moveDown() {
 }
 
 func placeTetro() {
-  for _, pos := range tetromino {
-    field[posY + pos.y][posX + pos.x] = colorIdx + 1
+  for _, pos := range tetromino.pos {
+    field[posY + pos.y][posX + pos.x] = tetromino.colorIdx + 1
   }
 }
 
@@ -336,12 +340,15 @@ func makeTretroObject(matrix [][]int) (res Tetromino){
   for i, row := range matrix {
     for j, cell := range row {
       if cell == 1 {
-        res[x].x = i
-        res[x].y = j
+        res.pos[x].x = i
+        res.pos[x].y = j
         x++
       }
     }
   }
+
+  res.colorIdx = rand.Intn(8)
+  res.matrix = matrix
 
   return res
 }
@@ -350,10 +357,8 @@ func makeTretroObject(matrix [][]int) (res Tetromino){
 func generateTetromino() {
   posY = 0
   posX = FIELD_WIDTH / 2
-  colorIdx = rand.Intn(8)
-  r := rand.Intn(5)
-  matrixTetromino = InitialTetros[r]
-  tetromino = makeTretroObject(matrixTetromino)
+  r := rand.Intn(len(InitialTetros))
+  tetromino = makeTretroObject(InitialTetros[r])
 }
 
 // initGrid will populate the values of the global grid object
