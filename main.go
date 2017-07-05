@@ -3,7 +3,8 @@ package main
 import(
   "time"
   "runtime"
-  "math/rand"
+
+  "tetris/game"
 
   "github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -12,93 +13,11 @@ import(
 // CONSTANTS
 const(
   TIMER_PERIOD = 255 // milliseconds
-  FIELD_WIDTH = 10
-  FIELD_LENGTH = 20
   BLOCK_SIZE = 20
 
   // Window size for GL
-	WINDOW_WIDTH = BLOCK_SIZE * FIELD_WIDTH
-	WINDOW_HEIGHT = BLOCK_SIZE * FIELD_LENGTH
-)
-
-type Tetromino struct {
-  pos [4]Position
-  colorIdx int
-  matrix [][]int
-}
-
-// Each peice in the game is defined by
-// and array of 4 points, the points
-// are defined by integer x and y values
-type Position struct {
-  x int
-  y int
-}
-
-type Color struct{
-  R int
-  G int
-  B int
-}
-
-// GLOBAL VARIABLES
-var (
-  posX = 0
-  posY = 0
-
-  field [FIELD_LENGTH+2][FIELD_WIDTH+2]int
-
-  InitialTetros = [][][]int{
-    [][]int {
-        []int {0,0,1,0},
-        []int {0,0,1,0},
-        []int {0,0,1,1},
-        []int {0,0,0,0},
-    },
-
-
-    [][]int {
-        []int {0,0,0,0},
-        []int {0,1,1,1},
-        []int {0,0,1,0},
-        []int {0,0,0,0},
-    },
-
-    [][]int {
-        []int {0,0,0,0},
-        []int {0,1,1,0},
-        []int {0,1,1,0},
-        []int {0,0,0,0},
-    },
-
-    [][]int {
-        []int {0,0,0,0},
-        []int {0,0,1,1},
-        []int {0,1,1,0},
-        []int {0,0,0,0},
-    },
-
-    [][]int {
-        []int {0,0,1,0},
-        []int {0,0,1,0},
-        []int {0,0,1,0},
-        []int {0,0,1,0},
-    },
-  }
-
-  // There will only be one peice active at a time
-  tetromino Tetromino
-
-  Colors = []Color{
-		Color{0, 0, 0},
-		Color{170, 0, 0},
-		Color{192, 192, 192},
-		Color{170, 0, 170},
-		Color{0, 0, 170},
-		Color{0, 170, 0},
-		Color{170, 85, 0},
-		Color{0, 170, 170},
-	}
+	WINDOW_WIDTH = BLOCK_SIZE * game.FIELD_WIDTH
+	WINDOW_HEIGHT = BLOCK_SIZE * game.FIELD_LENGTH
 )
 
 func init() {
@@ -123,7 +42,7 @@ func main() {
 		panic(err)
 	}
 
-  startGame()
+  game.StartGame()
 
   // by making this thread the current context
   // we are saying that all drawings will happen on this thread
@@ -159,60 +78,24 @@ func main() {
 func keyPress(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
   switch key {
   case glfw.KeyUp:
-    // we dont want to trigger on the edges of a key press
-    if action != glfw.Press {
-      return
-    }
-    rotateTetromino()
-  	case glfw.KeyLeft:
-  		lateralTranslation(-1)
-  	case glfw.KeyRight:
-  		lateralTranslation(1)
-  	case glfw.KeyDown:
-  		moveDown()
+  // we dont want to trigger on the edges of a key press
+  if action != glfw.Press {
+    return
+  }
+  game.RotateTetromino()
+	case glfw.KeyLeft:
+		game.LateralTranslation(-1)
+	case glfw.KeyRight:
+		game.LateralTranslation(1)
+	case glfw.KeyDown:
+		game.MoveDown()
   }
 }
 
 func gameTicker() {
   ticker := time.NewTicker(time.Millisecond * TIMER_PERIOD)
   for _ = range ticker.C {
-    tick()
-  }
-}
-
-func tick() {
-  moveDown()
-}
-
-// The deleteCompletedLine function will delete an entire line
-// from the field if there is not single element with the value of
-// 0. We the move everthing above that row down by done
-func deleteCompletedLine() {
-  for i, row := range field {
-    if i == 0 || i == FIELD_LENGTH + 1 {
-      continue
-    }
-
-
-    completedRow := true
-
-    for _, cell := range row {
-      if cell == 0 {
-        completedRow = false
-        break
-      }
-    }
-
-    // move everything down by one
-    if completedRow == true {
-      println(i)
-      for x := i - 1; x >= 1; x-- {
-        for y, _ := range field[x] {
-          field[x+1][y] = field[x][y]
-        }
-      }
-      return
-    }
+    game.Tick()
   }
 }
 
@@ -234,9 +117,9 @@ func drawBlock(i int, j int) {
 }
 
 func drawTetromino() {
-  setColor(tetromino.colorIdx)
-  for _, pos := range tetromino.pos {
-    drawBlock(posY + pos.y, posX + pos.x)
+  setColor(game.GetTetro().ColorIdx)
+  for _, pos := range game.GetTetro().Pos {
+    drawBlock(game.GetY() + pos.GetY(), game.GetX() + pos.GetX())
   }
 }
 
@@ -245,7 +128,7 @@ func glVertex(x, y int) {
 }
 
 func drawField() {
-  for i, row := range field {
+  for i, row := range game.GetField() {
     for j, cell := range row {
       if cell > 0 {
         setColor(cell - 1)
@@ -255,123 +138,8 @@ func drawField() {
   }
 }
 
-func startGame() {
-  initGrid()
-  generateTetromino()
-}
-
-// move the tetromino peice left and right
-func lateralTranslation(dx int) {
-  for _, pos := range tetromino.pos {
-    if field[pos.y + posY][pos.x + posX + dx] != 0 {
-      return
-    }
-  }
-
-  posX += dx
-}
-
-func rotateTetromino() {
-  // generate rotated matrix
-  newTetrominoMatrix := rotateMatrix(tetromino.matrix)
-  newTetromino := makeTretroObject(newTetrominoMatrix)
-
-  for _, pos := range newTetromino.pos {
-    if field[posY + pos.y][posX + pos.x] != 0 {
-      return
-    }
-  }
-
-  // assign the current tetromino to the new matrix
-  newTetromino.colorIdx = tetromino.colorIdx
-  tetromino = newTetromino
-}
-
-func moveDown() {
-  for _, pos := range tetromino.pos {
-    if field[pos.y + posY + 1][pos.x + posX] != 0 {
-
-      // the Game is over
-      if posY < 2 {
-				startGame()
-				return
-			}
-
-      // leave the peice on the field
-      placeTetro()
-      deleteCompletedLine()
-      generateTetromino()
-      return
-    }
-  }
-
-  posY++
-}
-
-func placeTetro() {
-  for _, pos := range tetromino.pos {
-    field[posY + pos.y][posX + pos.x] = tetromino.colorIdx + 1
-  }
-}
 
 func setColor(idx int) {
-  c := Colors[idx]
+  c := game.Colors[idx]
   gl.Color3ub(uint8(c.R), uint8(c.G), uint8(c.B))
-}
-
-// since all the pecies are represented as a 2D matrix
-// we can rotate the matrix in order to rotate the peice
-// counter clockwise
-func rotateMatrix(mat [][]int) [][]int {
-    for x := 0; x < 2; x++ {
-        for y := x; y < 3-x; y++ {
-            var temp int = mat[x][y];
-            mat[x][y] = mat[y][3-x];
-            mat[y][3-x] = mat[3-x][3-y];
-            mat[3-x][3-y] = mat[3-y][x];
-            mat[3-y][x] = temp;
-        }
-    }
-    return mat
-}
-
-func makeTretroObject(matrix [][]int) (res Tetromino){
-  x := 0
-  for i, row := range matrix {
-    for j, cell := range row {
-      if cell == 1 {
-        res.pos[x].x = i
-        res.pos[x].y = j
-        x++
-      }
-    }
-  }
-
-  res.colorIdx = rand.Intn(8)
-  res.matrix = matrix
-
-  return res
-}
-
-// Genearte a new Tetromino object to be placed into the field
-func generateTetromino() {
-  posY = 0
-  posX = FIELD_WIDTH / 2
-  r := rand.Intn(len(InitialTetros))
-  tetromino = makeTretroObject(InitialTetros[r])
-}
-
-// initGrid will populate the values of the global grid object
-// it initializes all values as 0 with the outer edges defined as -1
-// the reason for this is to check if a left/right translation leads
-// to an invalid move
-func initGrid() {
-  for i, row := range field {
-    for j, _ := range row {
-      field[i][j] = 0
-      if j == 0 || i == 0 || i == FIELD_LENGTH+1 || j == FIELD_WIDTH+1 {
-        field[i][j] = -1
-      }
-    }
-  }
 }
